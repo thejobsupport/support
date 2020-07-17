@@ -1,0 +1,8 @@
+---
+ - name: app1
+   hosts: localhost
+   user: ubuntu 
+
+   roles:
+     - {role: twistlock, tags: ['twistlock']}
+

@@ -1,0 +1,35 @@
+---
+
+- name: Docker Registry 
+  shell: oc get route docker-registry -n default
+  ignore_errors: yes
+  register: route_out
+
+- name: create Docker Registry 
+  shell: IMAGE_REGISTRY_EXTERNAL=$(oc get route docker-registry -n default | awk '{print $2}' | tail -n +2) ; IMAGE_REGISTRY_INTERNAL="docker-registry.default.svc:5000"; IMAGE_REGISTRY_ADDRESS="$IMAGE_REGISTRY_INTERNAL/twistlock/private:console_{{TWISTLOCK_VERSION}}" 
+  when: route_out|failed
+
+
+- name: Chekc namespace is present or not  
+  shell: oc adm new-project $TWISTLOCK_NAMESPACE --node-selector=''
+  ignore_errors: yes
+  register: namespace_out
+
+
+
+- name: setup imageStream pass-thr
+  shell: oc create secret docker-registry twistlock-registry --docker-server=registry.twistlock.com --docker-username=twistlock --docker-password=${ACCESS_TOKEN}} --docker-email=customer@example.com ;oc import-image twistlock/defender:defender_{{TWISTLOCK_VERSION}} --from=registry.twistlock.com/twistlock/defender:defender_{{TWISTLOCK_VERSION}} --confirm; oc import-image twistlock/console:console_{{TWISTLOCK_VERSION}} --from=registry.twistlock.com/twistlock/console:console_{{TWISTLOCK_VERSION}} --confirm
+  #ignore_errors: yes
+  # register: cmd_out
+
+ 
+
+- name: Download tar for twistlock 
+  shell: wget {{ TWISTLOCK_RELEASE_URL }} -O /opt/   
+ 
+
+- name: Extract foo.tgz
+  unarchive:
+    src: twistlock.tar.gz
+    dest: /opt/
+

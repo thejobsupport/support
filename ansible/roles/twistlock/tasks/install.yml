@@ -10,11 +10,16 @@
   when: route_out|failed
 
 
-- name: Chekc namespace is present or not  
-  shell: oc adm new-project $TWISTLOCK_NAMESPACE --node-selector=''
-  ignore_errors: yes
-  register: namespace_out
-
+- name: Create project
+  oc:
+    state: present
+    inline:
+      kind: ProjectRequest
+      metadata:
+        name: ansibletestproject
+      displayName: Ansible Test Project
+      description: This project was created using Ansible
+    token: << redacted >>
 
 
 - name: setup imageStream pass-thr
@@ -33,3 +38,47 @@
     src: twistlock.tar.gz
     dest: /opt/
 
+
+- name: Create a Persistent Volume Claim from an inline definition
+  openshift_raw:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: elastic-volume
+        namespace: testing
+      spec:
+        resources:
+          requests:
+            storage: 5Gi
+        accessModes:
+        - ReadWriteOnce    
+- name: Generating Twistlock Console Deployment
+  shell: {{ os }}/ twistcli console export openshift --namespace "$TWISTLOCK_NAMESPACE"  --persistent-volume-labels "$PV_LABELS" --image-name "$IMAGE_REGISTRY_ADDRESS" --orchestration-cli "oc" --service-type "ClusterIP" 
+ 
+- name: Create a Twistlock Deployment
+  openshift_raw:
+    state: present
+    src: /opt/twistlock_console.yaml 
+
+- name: create Twistlock Console route
+  openshift_raw:
+    state: present
+    src: /opt/twistlock_console.yaml 
+
+- name: Generating deamonsets
+  shell: machine/twistcli defender export openshift \
+  --address https://$TWISTLOCK_EXTERNAL_ROUTE \
+  --cluster-address $(oc get service twistlock-console -n $TWISTLOCK_NAMESPACE | awk '{print $2}' | tail -n +2) \
+  --namespace $TWISTLOCK_NAMESPACE \
+  --image-name $IMAGE_REGISTRY_INTERNAL/$TWISTLOCK_NAMESPACE/private:defender_$TWISTLOCK_VERSION \
+  --user $TWISTLOCK_CONSOLE_USER \
+  --password $TWISTLOCK_CONSOLE_PASSWORD
+   
+
+- name: Create a Twistlock Daemonset
+  openshift_raw:
+    state: present
+    src: /opt/daemonset.yaml 
+          

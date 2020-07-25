@@ -1,7 +1,7 @@
 ---
 TWISTLOCK_PUBLIC_REGISTRY: "registry.twistlock.com"
-TWISTLOCK_VERSION: "2_5_99"
-TWISTLOCK_RELEASE_URL: "https://twistlock.example.com/releases/twistlock_2_5_99.tar.gz"
+TWISTLOCK_VERSION: "19.07.353"
+TWISTLOCK_RELEASE_URL: "https://cdn.twistlock.com/releases/bd05b8df/twistlock_{{TWISTLOCK_VERSION}}.tar.gz"
 TWISTLOCK_NAMESPACE: twistlock
 TWISTLOCK_LICENSE: 
 TWISTLOCK_EXTERNAL_ROUTE:
@@ -9,3 +9,7 @@ TWISTLOCK_CONSOLE_USER:
 TWISTLOCK_CONSOLE_PASSWORD: 
 OS: linux
 PV_LABELS:
+install_dir:
+console_url: "https://master.ent-ocp-np1-useast1.aws.internal.das/console/catalog"
+console_cred:
+storage_class: gp2 

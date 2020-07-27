@@ -1,53 +1,59 @@
 ---
-- name: Download tar for twistlock 
-  shell: wget {{ TWISTLOCK_RELEASE_URL }} -O /opt/   
- 
+
+- name: Download tar for twistlock
+  shell: wget {{ TWISTLOCK_RELEASE_URL }} -O /opt/
+
 
 - name: Extract Twistlock tar file
   unarchive:
     src: /opt/twistlock.tar.gz
     dest: "{{ install_dir }}"
 
-- name: Quay Registry 
+- name: Quay Registry
   shell: oc get route quay-ecosystem-quay  -n default
   # ignore_errors: yes
   # register: route_out
 
-#- name: create Docker Registry 
-#  shell: IMAGE_REGISTRY_EXTERNAL=$(oc get route docker-registry -n default | awk '{print $2}' | tail -n +2) ; IMAGE_REGISTRY_INTERNAL="docker-registry.default.svc:5000"; IMAGE_REGISTRY_ADDRESS="$IMAGE_REGISTRY_INTERNAL/twistlock/private:console_{{TWISTLOCK_VERSION}}" 
+#- name: create Docker Registry
+#  shell: IMAGE_REGISTRY_EXTERNAL=$(oc get route docker-registry -n default | awk '{print $2}' | tail -n +2) ; IMAGE_REGISTRY_INTERNAL="docker-registry.default.svc:5000"; IMAGE_REGISTRY_ADDRESS="$IMAGE_REGISTRY_INTERNAL/twistlock/private:console_{{TWISTLOCK_VERSION}}"
 #  when: route_out|failed
 
-- name: Login to openshift from console
-  shell: 
+#- name: Login to openshift from console
+#  shell:
 
-  # Creating the projects in Openshif
+  # Creating the namespace
+
+- name: Create TwistLock Namespace
+  shell:   oc create namespace "{{ TWISTLOCK_NAMESPACE }}"
+  ignore_errors: yes
+
+  # Creating the projects in Openshift
 
 - name: Create project
-  shell: oc adm twistlock "{{ TWISTLOCK_NAMESPAC }}"
+  shell: oc adm twistlock "{{ TWISTLOCK_NAMESPACE }}"
   #  ignore_errors: yes
 
+## Set up ImageStream pass-thru to be able to pull the container image from TwistLock's registry
+- name: setup imageStream pass-thr
+  shell: oc create secret docker-registry twistlock-registry --docker-server=registry.twistlock.com --docker-username=twistlock --docker-password="{{ ACCESS_TOKEN }}" --docker-email=customer@example.com ;oc import-image twistlock/defender:defender_"{{ TWISTLOCK_VERSION }}" --from=registry.twistlock.com/twistlock/defender:defender_"{{ TWISTLOCK_VERSION }}" --confirm; oc import-image twistlock/console:console_"{{ TWISTLOCK_VERSION }}" --from=registry.twistlock.com/twistlock/console:console_"{{ TWISTLOCK_VERSION }}" --confirm
+  ignore_errors: yes
+  register: cmd_out
 
 
-  #- name: setup imageStream pass-thr
-  #shell: oc create secret docker-registry twistlock-registry --docker-server=registry.twistlock.com --docker-username=twistlock --docker-password=${ACCESS_TOKEN}} --docker-email=customer@example.com ;oc import-image twistlock/defender:defender_{{TWISTLOCK_VERSION}} --from=registry.twistlock.com/twistlock/defender:defender_{{TWISTLOCK_VERSION}} --confirm; oc import-image twistlock/console:console_{{TWISTLOCK_VERSION}} --from=registry.twistlock.com/twistlock/console:console_{{TWISTLOCK_VERSION}} --confirm
-  #ignore_errors: yes
-  # register: cmd_out
 
 
-
-
-#Deploy the Twistloack console 
+#Deploy the Twistloack console
 #
 
 - name: Generating Twistlock Console Deployment
-  shell: '"{{ os }}"/twistcli console export openshift --storage-class "{{ storage_class }}" --image-name "{{ IMAGE_REGISTRY_ADDRESS }}" --orchestration-cli "oc"  --namespace "{{ TWISTLOCK_NAMESPACE }}" --service-type "ClusterIP"' 
- 
+  shell: '"{{ os }}"/twistcli console export openshift --storage-class "{{ storage_class }}" --image-name "{{ IMAGE_REGISTRY_ADDRESS }}" --orchestration-cli "oc"  --namespace "{{ TWISTLOCK_NAMESPACE }}" --service-type "ClusterIP"'
+
 - name: Create a Twistlock Deployment
   openshift_raw:
     state: present
-    src: /opt/twistlock_console.yaml 
+    src: /opt/twistlock_console.yaml
 
-# Deploying twistlock route file    
+# Deploying twistlock route file
 
 - name: copy route deployment file
   template:
@@ -62,41 +68,22 @@
 
   ##setting Twistlock console User/pass and License
 
-- name: set Twistlock console user/pass   
-  shell: curl -k -H 'Content-Type: application/json' -X POST   -d "{\"username\": \"{{ TWISTLOCK_CONSOLE_USER }}\", \"password\": \"{{ TWISTLOCK_CONSOLE_PASSWORD }}\"}" https://$TWISTLOCK_EXTERNAL_ROUTE/api/v1/signup
+- name: set Twistlock console user/pass
+  shell: curl -k -H 'Content-Type: application/json' -X POST   -d "{\"username\": \""{{ TWISTLOCK_CONSOLE_USER }}"\", \"password\": \""{{ TWISTLOCK_CONSOLE_PASSWORD }}"\"}" https://"{{ TWISTLOCK_EXTERNAL_ROUTE }}"/api/v1/signup
 
-- name: set Twistlock license. 
-  shell:  curl -k  -u "{{ TWISTLOCK_CONSOLE_USER }}":"{{ TWISTLOCK_CONSOLE_PASSWORD }}"  -H 'Content-Type: application/json'  -X POST   -d "{\"key\": \"{{ TWISTLOCK_LICENSE }}\"}"  https://{{ TWISTLOCK_EXTERNAL_ROUTE }}/api/v1/settings/license
+- name: set Twistlock license.
+  shell:  curl -k  -u "{{ TWISTLOCK_CONSOLE_USER }}":"{{ TWISTLOCK_CONSOLE_PASSWORD }}"  -H 'Content-Type: application/json'  -X POST   -d "{\"key\": \""{{ TWISTLOCK_LICENSE }}"\"}"  https://"{{ TWISTLOCK_EXTERNAL_ROUTE }}"/api/v1/settings/license
 
- 
-  ## Generate and deploy the defenders deamonsets  
+
+  ## Generate and deploy the defenders deamonsets
   #
 
 - name: Generating the deamonsets file to deploy defenders.
-  shell:  {{ os }}/twistcli defender export openshift --address https://{{ TWISTLOCK_EXTERNAL_ROUTE }} \ --cluster-address $(oc get service twistlock-console -n {{ TWISTLOCK_NAMESPACE }} | awk '{print $2}' | tail -n +2)  --namespace {{ TWISTLOCK_NAMESPACE }} --image-name {{ IMAGE_REGISTRY_INTERNAL }}/{{ TWISTLOCK_NAMESPACE }}/private:defender_{{ TWISTLOCK_VERSION }} --user {{ TWISTLOCK_CONSOLE_USER }} --password {{ TWISTLOCK_CONSOLE_PASSWORD }} 
+  shell:  {{ os }}/twistcli defender export openshift --address https://"{{ TWISTLOCK_EXTERNAL_ROUTE }}" \ --cluster-address $(oc get service twistlock-console -n "{{ TWISTLOCK_NAMESPACE }}" | awk '{print $2}' | tail -n +2)  --namespace "{{ TWISTLOCK_NAMESPACE }}" --image-name "{{ IMAGE_REGISTRY_INTERNAL }}"/"{{ TWISTLOCK_NAMESPACE }}"/private:defender_"{{ TWISTLOCK_VERSION }}" --user "{{ TWISTLOCK_CONSOLE_USER }}" --password "{{ TWISTLOCK_CONSOLE_PASSWORD }}"
 
 
 - name: Deploy defenders deamonsets
   openshift_raw:
     state: present
-    src: /opt/daemonset.yaml 
+    src: /opt/daemonset.yaml
 
-
-
-
-
-    #- name: Generating deamonsets
-    #shell: machine/twistcli defender export openshift \
-    #--address https://$TWISTLOCK_EXTERNAL_ROUTE \
-    #--cluster-address $(oc get service twistlock-console -n $TWISTLOCK_NAMESPACE | awk '{print $2}' | tail -n +2) \
-    #--namespace $TWISTLOCK_NAMESPACE \
-    #--image-name $IMAGE_REGISTRY_INTERNAL/$TWISTLOCK_NAMESPACE/private:defender_$TWISTLOCK_VERSION \
-    #--user $TWISTLOCK_CONSOLE_USER \
-    #--password $TWISTLOCK_CONSOLE_PASSWORD
-   
-
-- name: Create a Twistlock Daemonset
-  openshift_raw:
-    state: present
-    src: /opt/daemonset.yaml 
-          

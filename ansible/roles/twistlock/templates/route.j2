@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Route
+metadata:
+  namespace: {{ TWISTLOCK_NAMESPACE }}
+  labels:
+    name: console
+  name: twistlock-console
+spec:
+  host: {{ TWISTLOCK_EXTERNAL_ROUTE }}
+  port:
+    targetPort: mgmt-http
+  tls:
+    insecureEdgeTerminationPolicy: Redirect
+    termination: edge
+  to:
+    kind: Service
+    name: twistlock-console
+    weight: 100
+  wildcardPolicy: None
